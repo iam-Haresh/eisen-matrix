@@ -1,0 +1,4 @@
+{
+  "_comment": "Copy this file to 'eisenhower.config.json' to set where tasks are saved. Path is relative to the project root, or use an absolute path. The env var EISENHOWER_DATA_FILE overrides this.",
+  "dataFile": "./data/tasks.json"
+}

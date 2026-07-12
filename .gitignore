@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output (rebuilt with `npm run build`; commit it only for the offline
+# firewall fallback documented in README.md)
+dist/
+
+# Local task data and machine-specific config (keep personal data out of git)
+data/
+eisenhower.config.json
+
+# Secrets / environment
+.env
+.env.*
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.vite/
