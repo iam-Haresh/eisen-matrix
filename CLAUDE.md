@@ -76,8 +76,10 @@ missing fields on load/import so older saved data keeps working — **add new fi
 1. **Browser localStorage** — always on, the default. Key `eisenhower-tasks`. `save()` on
    every change; `load()` seeds initial state synchronously.
 2. **JSON file via `server.mjs`** — optional, on when the server is running.
-   - On mount, `App.jsx` calls `loadServer()`. If it succeeds, the **file becomes the source
-     of truth** (`setTasks(result.tasks)`) and `serverInfo.dataFile` drives the footer.
+   - On mount, `App.jsx` calls `loadServer()`. If it succeeds **and the file has tasks**, the
+     file is the source of truth (`setTasks(result.tasks)`); if the file is empty/missing, the
+     browser's tasks are kept and immediately **seeded into the file** (`saveServer`) — an
+     empty file must never wipe localStorage tasks. `serverInfo.dataFile` drives the footer.
    - After that initial load settles (`readyRef.current = true`), every change also
      `saveServer(tasks)` — a **400ms-debounced** best-effort `PUT /api/tasks`.
    - If the server isn't reachable, `loadServer()`/`saveServer()` no-op → browser-only mode.

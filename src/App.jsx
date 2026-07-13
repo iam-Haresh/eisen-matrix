@@ -28,18 +28,21 @@ export default function App() {
   const [showArchived, setShowArchived] = useState(false)
   const [serverInfo, setServerInfo] = useState(null) // { dataFile } when server is up
   const readyRef = useRef(false)
+  const tasksRef = useRef(tasks)
   const fileInputRef = useRef(null)
 
-  // On mount: if the companion server is running, adopt the file as the source
-  // of truth. Otherwise stay in browser-only mode. After this resolves, saves
-  // start mirroring to the file too.
+  // On mount: if the companion server is running, the file is the source of
+  // truth when it has tasks. If it's empty/missing (first run with the server,
+  // or tasks so far only lived in this browser), seed it from localStorage
+  // right away instead of letting the empty file wipe the board.
   useEffect(() => {
     let cancelled = false
     loadServer().then((result) => {
       if (cancelled) return
       if (result) {
-        setTasks(result.tasks)
         setServerInfo({ dataFile: result.dataFile })
+        if (result.tasks.length > 0) setTasks(result.tasks)
+        else saveServer(tasksRef.current)
       }
       readyRef.current = true
     })
@@ -51,6 +54,7 @@ export default function App() {
   // Auto-save on every change: always to localStorage, and to the JSON file too
   // once the initial server load has settled.
   useEffect(() => {
+    tasksRef.current = tasks
     save(tasks)
     if (readyRef.current) saveServer(tasks)
   }, [tasks])
