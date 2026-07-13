@@ -51,6 +51,8 @@ function resolveDataFile() {
 }
 
 const DATA_FILE = resolveDataFile()
+// Cleared completed tasks are appended here, alongside the data file.
+const COMPLETED_FILE = join(dirname(DATA_FILE), 'completed_tasks.json')
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -79,6 +81,37 @@ async function writeTasks(tasks) {
   await writeFile(DATA_FILE, JSON.stringify(tasks, null, 2))
 }
 
+async function appendCompleted(tasks) {
+  let existing = []
+  try {
+    const parsed = JSON.parse(await readFile(COMPLETED_FILE, 'utf8'))
+    if (Array.isArray(parsed)) existing = parsed
+  } catch {
+    // file may not exist yet — that's fine
+  }
+  const stamp = new Date().toISOString()
+  const appended = tasks.map((t) => ({ ...t, completedAt: stamp }))
+  await mkdir(dirname(COMPLETED_FILE), { recursive: true })
+  await writeFile(COMPLETED_FILE, JSON.stringify([...existing, ...appended], null, 2))
+  return appended.length
+}
+
+// Read the request body, enforcing the size cap. Returns null when too large
+// (the request is destroyed and the caller should respond 413).
+async function readBody(req) {
+  let body = ''
+  let size = 0
+  for await (const chunk of req) {
+    size += chunk.length
+    if (size > MAX_BODY_BYTES) {
+      req.destroy()
+      return null
+    }
+    body += chunk
+  }
+  return body
+}
+
 // Reflect the Origin only when it's an allowed same-machine origin. Requests
 // with no Origin header (curl, same-origin navigations) are fine. Returns the
 // raw Origin header so callers can decide whether to block a mutation.
@@ -86,7 +119,7 @@ function applyCors(req, res) {
   const origin = req.headers.origin
   if (origin && ALLOWED_ORIGIN.test(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin)
-    res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, POST, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
     res.setHeader('Vary', 'Origin')
   }
@@ -162,19 +195,8 @@ const server = createServer(async (req, res) => {
         sendJSON(res, 403, { ok: false, error: 'Cross-origin request blocked' })
         return
       }
-      let body = ''
-      let size = 0
-      let tooLarge = false
-      for await (const chunk of req) {
-        size += chunk.length
-        if (size > MAX_BODY_BYTES) {
-          tooLarge = true
-          break
-        }
-        body += chunk
-      }
-      if (tooLarge) {
-        req.destroy()
+      const body = await readBody(req)
+      if (body === null) {
         sendJSON(res, 413, { ok: false, error: 'Payload too large' })
         return
       }
@@ -190,6 +212,33 @@ const server = createServer(async (req, res) => {
     }
     res.writeHead(405)
     res.end('Method not allowed')
+    return
+  }
+
+  // Append cleared completed tasks to completed_tasks.json.
+  if (url.pathname === '/api/completed') {
+    if (req.method !== 'POST') {
+      res.writeHead(405)
+      res.end('Method not allowed')
+      return
+    }
+    if (isForbiddenOrigin(origin)) {
+      sendJSON(res, 403, { ok: false, error: 'Cross-origin request blocked' })
+      return
+    }
+    const body = await readBody(req)
+    if (body === null) {
+      sendJSON(res, 413, { ok: false, error: 'Payload too large' })
+      return
+    }
+    try {
+      const parsed = JSON.parse(body)
+      if (!Array.isArray(parsed)) throw new Error('Expected a JSON array')
+      const count = await appendCompleted(parsed)
+      sendJSON(res, 200, { ok: true, completedFile: COMPLETED_FILE, count })
+    } catch (e) {
+      sendJSON(res, 400, { ok: false, error: e.message })
+    }
     return
   }
 

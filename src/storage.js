@@ -83,6 +83,23 @@ export function saveServer(tasks) {
   }, 400)
 }
 
+// Append completed tasks to completed_tasks.json (next to the data file).
+// Returns the server's response, or null if the server rejected/isn't running —
+// callers should only delete the tasks locally on success.
+export async function archiveCompletedServer(tasks) {
+  try {
+    const res = await fetch('/api/completed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tasks),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
 // Save the task array to localStorage.
 export function save(tasks) {
   try {

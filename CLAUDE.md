@@ -39,17 +39,18 @@ Default port 4317 (override `PORT`). If `dist/` is missing, the server serves a 
 ```
 start.sh              One-command launcher: install (first run) + build + start + open browser
 index.html            Vite entry, mounts #root
-server.mjs            Zero-dep companion server: /api/tasks (GET/PUT) + serves dist/
+server.mjs            Zero-dep companion server: /api/tasks (GET/PUT), /api/completed (POST) + serves dist/
 vite.config.js        base:'./' (so dist works from file://) + dev proxy /api -> :4317
 eisenhower.config.example.json   copy to eisenhower.config.json to set data path
 src/
   main.jsx            ReactDOM root
   App.jsx             ALL task state + handlers; filtering pipeline; toolbar; footer
-  storage.js          localStorage (load/save) + server (loadServer/saveServer) + export/import + normalizeTask
+  storage.js          localStorage (load/save) + server (loadServer/saveServer/archiveCompletedServer) + export/import + normalizeTask
   dates.js            todayStr, nextRecurrence, dueStatus, formatDate  (YYYY-MM-DD strings)
   util.js             makeId
   components/
-    Quadrant.jsx      one quadrant: drop zone, header, add form (hidden in archived view)
+    Quadrant.jsx      one quadrant: drop zone, header, "+ Add a task" button (hidden in archived view); done tasks sorted to bottom
+    NewTaskModal.jsx  new-task popup (text/due/repeat/notes/checklist), due date defaults to today
     TaskCard.jsx      collapsed row + badges + expandable detail panel (due/repeat/notes/checklist/archive)
 ```
 
@@ -92,6 +93,11 @@ single-user tool.
 - `GET /api/tasks` → `{ tasks: [...], dataFile: "<abs path>" }` (empty array if file absent).
 - `PUT /api/tasks` body = tasks array → writes pretty JSON, `{ ok, dataFile, count }`;
   rejects non-arrays with 400, bodies over 5 MB with 413, cross-site mutations with 403.
+- `POST /api/completed` body = tasks array → **appends** to `completed_tasks.json` (same
+  directory as the data file), stamping each task with `completedAt` (ISO). Same 400/413/403
+  guards as PUT. Used by the toolbar "Clear completed" button: the client POSTs the done
+  tasks here first and only removes them from state (→ tasks.json) if that succeeds; in
+  browser-only mode it warns and deletes without a file backup.
 - Static serving has path-traversal protection (normalize + `startsWith(DIST+sep)`) and SPA
   fallback to index.html.
 
@@ -124,6 +130,11 @@ mutations, body cap, and normalize-on-input.
   resets its checklist instead of marking done.
 - Notes, checklist/subtasks: `TaskCard` detail panel; subtask edits go through `onUpdate`.
 - Global search: `App` filtering pipeline matches text + notes + subtask text.
+- New task: `Quadrant` "+ Add a task" → `NewTaskModal` (due date defaults to today) →
+  `App.addTask(quadrant, details)`.
+- Completed tasks: sorted to the bottom of each quadrant (`Quadrant`); "Hide completed"
+  toolbar chip → `hideDone` in `App`; "Clear completed" toolbar button → `App.clearCompleted()`
+  (moves them to `completed_tasks.json` via `POST /api/completed`, see API section).
 - Today filter / Archived view: toolbar chips → `todayOnly` / `showArchived` in `App`.
   Archived view hides quadrant add forms (`showAdd={!showArchived}`).
 - Export/Import JSON: `storage.js`.

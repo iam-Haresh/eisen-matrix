@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import TaskCard from './TaskCard.jsx'
+import NewTaskModal from './NewTaskModal.jsx'
 
 export default function Quadrant({
   quadrant,
@@ -11,14 +12,8 @@ export default function Quadrant({
   onDelete,
   onMove,
 }) {
-  const [draft, setDraft] = useState('')
+  const [adding, setAdding] = useState(false)
   const [isOver, setIsOver] = useState(false)
-
-  function handleSubmit(e) {
-    e.preventDefault()
-    onAdd(quadrant.key, draft)
-    setDraft('')
-  }
 
   function handleDrop(e) {
     e.preventDefault()
@@ -28,6 +23,8 @@ export default function Quadrant({
   }
 
   const remaining = tasks.filter((t) => !t.done).length
+  // Completed tasks sink to the bottom; sort is stable so order is otherwise kept.
+  const ordered = [...tasks].sort((a, b) => Number(a.done) - Number(b.done))
 
   return (
     <section
@@ -53,10 +50,10 @@ export default function Quadrant({
       </div>
 
       <div className="quadrant-list">
-        {tasks.length === 0 ? (
+        {ordered.length === 0 ? (
           <p className="quadrant-empty">Nothing here yet — drop or add a task.</p>
         ) : (
-          tasks.map((task) => (
+          ordered.map((task) => (
             <TaskCard
               key={task.id}
               task={task}
@@ -69,18 +66,23 @@ export default function Quadrant({
       </div>
 
       {showAdd && (
-        <form className="quadrant-add" onSubmit={handleSubmit}>
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="+ Add a task"
+        <>
+          <button
+            type="button"
+            className="quadrant-add-btn"
+            onClick={() => setAdding(true)}
             aria-label={`Add a task to ${quadrant.title}`}
-          />
-          <button type="submit" disabled={!draft.trim()}>
-            Add
+          >
+            + Add a task
           </button>
-        </form>
+          {adding && (
+            <NewTaskModal
+              quadrant={quadrant}
+              onSave={(details) => onAdd(quadrant.key, details)}
+              onClose={() => setAdding(false)}
+            />
+          )}
+        </>
       )}
     </section>
   )

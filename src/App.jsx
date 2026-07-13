@@ -5,6 +5,7 @@ import {
   save,
   loadServer,
   saveServer,
+  archiveCompletedServer,
   exportJSON,
   importJSON,
 } from './storage.js'
@@ -23,6 +24,7 @@ export default function App() {
   const [tasks, setTasks] = useState(load)
   const [query, setQuery] = useState('')
   const [todayOnly, setTodayOnly] = useState(false)
+  const [hideDone, setHideDone] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [serverInfo, setServerInfo] = useState(null) // { dataFile } when server is up
   const readyRef = useRef(false)
@@ -53,8 +55,9 @@ export default function App() {
     if (readyRef.current) saveServer(tasks)
   }, [tasks])
 
-  function addTask(quadrant, text) {
-    const trimmed = text.trim()
+  // details comes from the new-task modal: { text, dueDate, recurrence, notes, subtasks }
+  function addTask(quadrant, details) {
+    const trimmed = (details.text || '').trim()
     if (!trimmed) return
     setTasks((prev) => [
       ...prev,
@@ -63,10 +66,10 @@ export default function App() {
         text: trimmed,
         quadrant,
         done: false,
-        dueDate: null,
-        recurrence: null,
-        notes: '',
-        subtasks: [],
+        dueDate: details.dueDate ?? null,
+        recurrence: details.recurrence ?? null,
+        notes: details.notes ?? '',
+        subtasks: details.subtasks ?? [],
         archived: false,
       },
     ])
@@ -104,6 +107,28 @@ export default function App() {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, quadrant } : t)))
   }
 
+  // Move every completed task out of the board: append them to
+  // completed_tasks.json (when the server is up) and delete them from the task
+  // list — the normal save pipeline then rewrites tasks.json without them.
+  async function clearCompleted() {
+    const completed = tasks.filter((t) => t.done)
+    if (completed.length === 0) return
+    const message = serverInfo
+      ? `Move ${completed.length} completed task(s) to completed_tasks.json and remove them from the board?`
+      : `Delete ${completed.length} completed task(s)? The file server isn't running, so they will NOT be saved to completed_tasks.json.`
+    if (!window.confirm(message)) return
+    if (serverInfo) {
+      const result = await archiveCompletedServer(completed)
+      if (!result) {
+        window.alert(
+          'Could not write completed_tasks.json — nothing was deleted.',
+        )
+        return
+      }
+    }
+    setTasks((prev) => prev.filter((t) => !t.done))
+  }
+
   async function handleImportFile(e) {
     const file = e.target.files?.[0]
     e.target.value = '' // allow re-importing the same file later
@@ -128,6 +153,7 @@ export default function App() {
   const visibleTasks = useMemo(() => {
     return tasks.filter((t) => {
       if (t.archived !== showArchived) return false
+      if (hideDone && !showArchived && t.done) return false
       if (todayOnly && !showArchived) {
         const status = dueStatus(t.dueDate, t.done)
         if (status !== 'overdue' && status !== 'today') return false
@@ -144,10 +170,14 @@ export default function App() {
       }
       return true
     })
-  }, [tasks, showArchived, todayOnly, q])
+  }, [tasks, showArchived, hideDone, todayOnly, q])
 
   const archivedCount = useMemo(
     () => tasks.filter((t) => t.archived).length,
+    [tasks],
+  )
+  const doneCount = useMemo(
+    () => tasks.filter((t) => t.done).length,
     [tasks],
   )
   const overdueCount = useMemo(
@@ -237,11 +267,29 @@ export default function App() {
           </button>
           <button
             type="button"
+            className={`chip${hideDone ? ' chip--on' : ''}`}
+            onClick={() => setHideDone((v) => !v)}
+            disabled={showArchived}
+            title="Hide completed tasks"
+          >
+            Hide completed
+          </button>
+          <button
+            type="button"
             className={`chip${showArchived ? ' chip--on' : ''}`}
             onClick={() => setShowArchived((v) => !v)}
             title="Show archived tasks"
           >
             Archived{archivedCount > 0 ? ` (${archivedCount})` : ''}
+          </button>
+          <button
+            type="button"
+            className="chip chip--danger"
+            onClick={clearCompleted}
+            disabled={doneCount === 0}
+            title="Move all completed tasks to completed_tasks.json and remove them from the board"
+          >
+            Clear completed{doneCount > 0 ? ` (${doneCount})` : ''}
           </button>
         </div>
       </div>
