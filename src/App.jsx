@@ -31,17 +31,17 @@ export default function App() {
   const tasksRef = useRef(tasks)
   const fileInputRef = useRef(null)
 
-  // On mount: if the companion server is running, the file is the source of
-  // truth when it has tasks. If it's empty/missing (first run with the server,
-  // or tasks so far only lived in this browser), seed it from localStorage
-  // right away instead of letting the empty file wipe the board.
+  // On mount: if the companion server is running and the data file exists, the
+  // file is the source of truth — read it, never replace it on load. Only when
+  // there is no file at all (first run with the server) is one created from
+  // the browser's tasks.
   useEffect(() => {
     let cancelled = false
     loadServer().then((result) => {
       if (cancelled) return
       if (result) {
         setServerInfo({ dataFile: result.dataFile })
-        if (result.tasks.length > 0) setTasks(result.tasks)
+        if (result.exists) setTasks(result.tasks)
         else saveServer(tasksRef.current)
       }
       readyRef.current = true

@@ -186,7 +186,13 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === '/api/tasks') {
     if (req.method === 'GET') {
-      sendJSON(res, 200, { tasks: await readTasks(), dataFile: DATA_FILE })
+      // `exists` lets the client tell "no file yet" (safe to create) apart from
+      // an existing file — an existing file must never be replaced on load.
+      sendJSON(res, 200, {
+        tasks: await readTasks(),
+        dataFile: DATA_FILE,
+        exists: existsSync(DATA_FILE),
+      })
       return
     }
     if (req.method === 'PUT') {

@@ -76,10 +76,11 @@ missing fields on load/import so older saved data keeps working — **add new fi
 1. **Browser localStorage** — always on, the default. Key `eisenhower-tasks`. `save()` on
    every change; `load()` seeds initial state synchronously.
 2. **JSON file via `server.mjs`** — optional, on when the server is running.
-   - On mount, `App.jsx` calls `loadServer()`. If it succeeds **and the file has tasks**, the
-     file is the source of truth (`setTasks(result.tasks)`); if the file is empty/missing, the
-     browser's tasks are kept and immediately **seeded into the file** (`saveServer`) — an
-     empty file must never wipe localStorage tasks. `serverInfo.dataFile` drives the footer.
+   - On mount, `App.jsx` calls `loadServer()`. The GET response includes `exists` (is the
+     data file on disk). **If the file exists it is the source of truth — read it, never
+     replace it on load, even if it's empty.** Only when there is no file at all is one
+     created from the browser's tasks (`saveServer(tasksRef.current)`).
+     `serverInfo.dataFile` drives the footer.
    - After that initial load settles (`readyRef.current = true`), every change also
      `saveServer(tasks)` — a **400ms-debounced** best-effort `PUT /api/tasks`.
    - If the server isn't reachable, `loadServer()`/`saveServer()` no-op → browser-only mode.
@@ -92,7 +93,9 @@ single-user tool.
 
 ## API (server.mjs)
 
-- `GET /api/tasks` → `{ tasks: [...], dataFile: "<abs path>" }` (empty array if file absent).
+- `GET /api/tasks` → `{ tasks: [...], dataFile: "<abs path>", exists: bool }` (empty array if
+  file absent; `exists` = data file is on disk, so the client can tell "no file yet" apart
+  from an existing file it must not replace).
 - `PUT /api/tasks` body = tasks array → writes pretty JSON, `{ ok, dataFile, count }`;
   rejects non-arrays with 400, bodies over 5 MB with 413, cross-site mutations with 403.
 - `POST /api/completed` body = tasks array → **appends** to `completed_tasks.json` (same

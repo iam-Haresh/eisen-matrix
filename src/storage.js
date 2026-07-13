@@ -54,7 +54,8 @@ export function load() {
 
 const API = '/api/tasks'
 
-// Returns { tasks, dataFile } if the server is reachable, otherwise null.
+// Returns { tasks, dataFile, exists } if the server is reachable, otherwise
+// null. `exists` says whether the data file is already on disk.
 export async function loadServer() {
   try {
     const res = await fetch(API)
@@ -63,6 +64,7 @@ export async function loadServer() {
     return {
       tasks: Array.isArray(data.tasks) ? data.tasks.map(normalizeTask) : [],
       dataFile: data.dataFile,
+      exists: !!data.exists,
     }
   } catch {
     return null // server not running — that's fine
